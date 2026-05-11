@@ -78,7 +78,6 @@ mp_hands   = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_style   = mp.solutions.drawing_styles
 
-# Satu instance hands per session (thread-safe via per-sid state)
 def make_hands():
     return mp_hands.Hands(
         static_image_mode=False,
@@ -96,18 +95,18 @@ sessions = {}
 def get_session(sid):
     if sid not in sessions:
         sessions[sid] = {
-            "hands":        make_hands(),
-            "mode":         "IMAGE",
-            "prob_buffer":  deque(maxlen=SMOOTH_WINDOW),
-            "label_buffer": deque(maxlen=SMOOTH_WINDOW),
-            "translation":  "",
-            "debounce":     0,
-            "sequence":     [],
-            "collecting":   False,
+            "hands":         make_hands(),
+            "mode":          "IMAGE",
+            "prob_buffer":   deque(maxlen=SMOOTH_WINDOW),
+            "label_buffer":  deque(maxlen=SMOOTH_WINDOW),
+            "translation":   "",
+            "debounce":      0,
+            "sequence":      [],
+            "collecting":    False,
             "no_hand_count": 0,
-            "last_label":   None,
+            "last_label":    None,
             "current_label": "---",
-            "current_conf": 0.0,
+            "current_conf":  0.0,
         }
     return sessions[sid]
 
@@ -193,15 +192,16 @@ def on_disconnect():
 
 @socketio.on("set_mode")
 def on_set_mode(data):
-    sid   = request_sid()
-    s     = get_session(sid)
-    mode  = data.get("mode", "IMAGE")
+    sid  = request_sid()
+    s    = get_session(sid)
+    mode = data.get("mode", "IMAGE")
     if mode == "IMAGE" and model_img is None:
         emit("error", {"msg": "Model gambar tidak tersedia"})
         return
     if mode == "VIDEO" and model_vid is None:
         emit("error", {"msg": "Model video tidak tersedia"})
         return
+    # Reset semua state saat ganti mode
     s["mode"]          = mode
     s["sequence"]      = []
     s["collecting"]    = False
@@ -234,7 +234,7 @@ def on_frame(data):
         frame    = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         if frame is None:
             return
-    except Exception as e:
+    except Exception:
         return
 
     frame = cv2.flip(frame, 1)
@@ -282,15 +282,19 @@ def on_frame(data):
     elif mode == "VIDEO" and model_vid is not None:
         if hand_detected:
             s["no_hand_count"] = 0
-            if not s["collecting"]:
-                s["collecting"] = True
-                s["sequence"]   = []
-
+            s["collecting"]    = True
             s["sequence"].append(combined)
-            seq_progress = min(len(s["sequence"]), SEQ_LEN)
 
-            if len(s["sequence"]) >= SEQ_LEN:
-                inp  = np.array(s["sequence"][:SEQ_LEN], dtype=np.float32).reshape(1, SEQ_LEN, FEATURE_DIM)
+            # Batasi panjang sequence agar tidak membengkak di memori
+            if len(s["sequence"]) > SEQ_LEN * 3:
+                s["sequence"] = s["sequence"][-SEQ_LEN:]
+
+            seq_len = len(s["sequence"])
+            emit("seq_progress", {"current": min(seq_len, SEQ_LEN), "total": SEQ_LEN})
+
+            # Baru predict kalau sudah cukup frame
+            if seq_len >= SEQ_LEN:
+                inp  = np.array(s["sequence"][-SEQ_LEN:], dtype=np.float32).reshape(1, SEQ_LEN, FEATURE_DIM)
                 pred = model_vid.predict(inp, verbose=0)[0]
 
                 s["prob_buffer"].append(pred)
@@ -311,17 +315,18 @@ def on_frame(data):
                     s["debounce"]     = DEBOUNCE_FRAMES * 2
                     emit("translation_update", {"text": s["translation"]})
 
+                # Sliding window: buang separuh frame lama
                 s["sequence"] = s["sequence"][SEQ_LEN // 2:]
 
-            emit("seq_progress", {"current": seq_progress, "total": SEQ_LEN})
         else:
             s["no_hand_count"] += 1
             seq_len = len(s["sequence"])
-            emit("seq_progress", {"current": seq_len, "total": SEQ_LEN})
+            emit("seq_progress", {"current": min(seq_len, SEQ_LEN), "total": SEQ_LEN})
 
             if s["no_hand_count"] > 15:
+                # FIX: hanya predict kalau sequence cukup
                 if s["collecting"] and seq_len >= SEQ_LEN:
-                    inp  = np.array(s["sequence"][:SEQ_LEN], dtype=np.float32).reshape(1, SEQ_LEN, FEATURE_DIM)
+                    inp  = np.array(s["sequence"][-SEQ_LEN:], dtype=np.float32).reshape(1, SEQ_LEN, FEATURE_DIM)
                     pred = model_vid.predict(inp, verbose=0)[0]
                     idx  = int(np.argmax(pred))
                     conf = float(pred[idx])
@@ -334,12 +339,15 @@ def on_frame(data):
                         s["debounce"]     = DEBOUNCE_FRAMES * 2
                         emit("translation_update", {"text": s["translation"]})
 
+                # Reset state setelah tangan hilang
                 s["collecting"]    = False
                 s["sequence"]      = []
                 s["prob_buffer"].clear()
                 s["label_buffer"].clear()
+                s["current_label"] = "---"
+                s["current_conf"]  = 0.0
 
-    # Debounce
+    # Debounce countdown
     if s["debounce"] > 0:
         s["debounce"] -= 1
 
@@ -348,11 +356,11 @@ def on_frame(data):
     frame_b64 = "data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode()
 
     emit("prediction", {
-        "label":        s["current_label"],
-        "conf":         round(s["current_conf"] * 100, 1),
+        "label":         s["current_label"],
+        "conf":          round(s["current_conf"] * 100, 1),
         "hand_detected": hand_detected,
-        "mode":         mode,
-        "frame":        frame_b64,
+        "mode":          mode,
+        "frame":         frame_b64,
     })
 
 # Helper untuk mendapatkan SID dari context SocketIO
