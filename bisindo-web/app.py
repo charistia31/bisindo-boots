@@ -42,9 +42,7 @@ ENCODER_VIDEO_PATH = os.path.join(BASE_DIR, "label_encoder_video.pkl")
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "bisindo-secret-key")
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading",
-                    max_http_buffer_size=10 * 1024 * 1024,
-                    ping_timeout=60, ping_interval=25,
-                    transports=["websocket", "polling"])
+                    max_http_buffer_size=10 * 1024 * 1024)
 
 # ─────────────────────────────────────────────
 #  LOAD MODELS
@@ -57,16 +55,7 @@ def load_model_safe(model_path, encoder_path, name):
         print(f"[WARN] {name}: encoder not found at {encoder_path}")
         return None, None, "ENCODER_NOT_FOUND"
     try:
-        # Handle TF version mismatch untuk LSTM time_major argument
-        class SafeLSTM(tf.keras.layers.LSTM):
-            def __init__(self, *args, **kwargs):
-                kwargs.pop('time_major', None)
-                super().__init__(*args, **kwargs)
-        try:
-            model = tf.keras.models.load_model(model_path, compile=False,
-                        custom_objects={'LSTM': SafeLSTM})
-        except Exception:
-            model = tf.keras.models.load_model(model_path, compile=False)
+        model = tf.keras.models.load_model(model_path, compile=False)
         with open(encoder_path, "rb") as f:
             le = pickle.load(f)
         print(f"[OK] {name} loaded. Classes: {le.classes_}")
@@ -78,12 +67,6 @@ def load_model_safe(model_path, encoder_path, name):
 print("=" * 50)
 print("BISINDO Web — Loading Models...")
 print("=" * 50)
-print(f"[DEBUG] BASE_DIR: {BASE_DIR}")
-print(f"[DEBUG] Files in BASE_DIR: {os.listdir(BASE_DIR)}")
-print(f"[DEBUG] MODEL_IMAGE_PATH: {MODEL_IMAGE_PATH} exists={os.path.exists(MODEL_IMAGE_PATH)}")
-print(f"[DEBUG] MODEL_VIDEO_PATH: {MODEL_VIDEO_PATH} exists={os.path.exists(MODEL_VIDEO_PATH)}")
-print(f"[DEBUG] ENCODER_IMAGE_PATH: {ENCODER_IMAGE_PATH} exists={os.path.exists(ENCODER_IMAGE_PATH)}")
-print(f"[DEBUG] ENCODER_VIDEO_PATH: {ENCODER_VIDEO_PATH} exists={os.path.exists(ENCODER_VIDEO_PATH)}")
 model_img, le_img, status_img = load_model_safe(MODEL_IMAGE_PATH, ENCODER_IMAGE_PATH, "IMAGE")
 model_vid, le_vid, status_vid = load_model_safe(MODEL_VIDEO_PATH, ENCODER_VIDEO_PATH, "VIDEO")
 print("=" * 50)

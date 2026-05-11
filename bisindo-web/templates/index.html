@@ -518,10 +518,9 @@
 const socket     = io();
 let currentMode  = 'IMAGE';
 let isRunning    = false;
-let frameTimer      = null;
-let lastFrameTs     = 0;
-let fpsCounter      = 0;
-let waitingResponse = false;
+let frameTimer   = null;
+let lastFrameTs  = 0;
+let fpsCounter   = 0;
 let fpsTimer     = null;
 let totalCount   = 0;
 let prevTranslation = '';
@@ -570,7 +569,6 @@ socket.on('server_info', (data) => {
 });
 
 socket.on('prediction', (data) => {
-  waitingResponse = false;  // server sudah balas, boleh kirim lagi
   updatePrediction(data);
   if (data.frame) {
     canvasDisplay.src = data.frame;
@@ -612,8 +610,8 @@ async function startCamera() {
     videoEl.srcObject = stream;
     await videoEl.play();
 
-    captureCanvas.width  = 480;
-    captureCanvas.height = 360;
+    captureCanvas.width  = 640;
+    captureCanvas.height = 480;
 
     startOverlay.style.display = 'none';
     canvasDisplay.style.display = 'block';
@@ -639,17 +637,14 @@ async function startCamera() {
 function sendFrame() {
   if (!isRunning) return;
 
-  // Jangan kirim kalau server belum balas (hindari flood)
-  if (!waitingResponse) {
-    const ctx = captureCanvas.getContext('2d');
-    ctx.drawImage(videoEl, 0, 0, 480, 360);  // resize kecil hemat bandwidth
-    const b64 = captureCanvas.toDataURL('image/jpeg', 0.5);  // kualitas lebih rendah
-    waitingResponse = true;
-    socket.emit('frame', { image: b64 });
-  }
+  const ctx = captureCanvas.getContext('2d');
+  ctx.drawImage(videoEl, 0, 0, 640, 480);
+  const b64 = captureCanvas.toDataURL('image/jpeg', 0.7);
 
-  // Max 10fps ke server
-  frameTimer = setTimeout(sendFrame, 100);
+  socket.emit('frame', { image: b64 });
+
+  // Target ~20fps to server (50ms interval)
+  frameTimer = setTimeout(sendFrame, 50);
 }
 
 // ─────────────────────────────────────────────
