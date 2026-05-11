@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 BISINDO Web - Flask + SocketIO Backend
-Deploy-ready untuk Railway
+Two-user room system: User1 (signer) <-> User2 (listener + speech)
 """
 
 import os
@@ -14,8 +14,8 @@ import numpy as np
 warnings.filterwarnings("ignore")
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
-from flask import Flask, render_template
-from flask_socketio import SocketIO, emit
+from flask import Flask, render_template, request as flask_request
+from flask_socketio import SocketIO, emit, join_room, leave_room
 import cv2
 import mediapipe as mp
 import tensorflow as tf
@@ -88,6 +88,28 @@ def make_hands():
     )
 
 # ─────────────────────────────────────────────
+#  ROOM MANAGEMENT
+#  rooms = { room_code: { "user1": sid, "user2": sid, "translation": "", "speech": "" } }
+# ─────────────────────────────────────────────
+rooms = {}
+
+def get_or_create_room(room_code):
+    if room_code not in rooms:
+        rooms[room_code] = {
+            "user1": None,
+            "user2": None,
+            "translation": "",   # isyarat -> teks (dari user1)
+            "speech": "",        # suara -> teks (dari user2)
+        }
+    return rooms[room_code]
+
+def find_room_by_sid(sid):
+    for code, room in rooms.items():
+        if room["user1"] == sid or room["user2"] == sid:
+            return code, room
+    return None, None
+
+# ─────────────────────────────────────────────
 #  PER-CLIENT SESSION STATE
 # ─────────────────────────────────────────────
 sessions = {}
@@ -96,10 +118,11 @@ def get_session(sid):
     if sid not in sessions:
         sessions[sid] = {
             "hands":         make_hands(),
+            "role":          None,   # "user1" or "user2"
+            "room_code":     None,
             "mode":          "IMAGE",
             "prob_buffer":   deque(maxlen=SMOOTH_WINDOW),
             "label_buffer":  deque(maxlen=SMOOTH_WINDOW),
-            "translation":   "",
             "debounce":      0,
             "sequence":      [],
             "collecting":    False,
@@ -154,22 +177,30 @@ def draw_landmarks_on_frame(frame, res):
 # ─────────────────────────────────────────────
 @app.route("/")
 def index():
+    return render_template("lobby.html")
+
+@app.route("/user1")
+def user1_page():
     available_modes = []
     if model_img is not None:
         available_modes.append("IMAGE")
     if model_vid is not None:
         available_modes.append("VIDEO")
-    return render_template("index.html",
+    return render_template("user1.html",
                            available_modes=available_modes,
                            image_classes=list(le_img.classes_) if le_img else [],
                            video_classes=list(le_vid.classes_) if le_vid else [])
 
+@app.route("/user2")
+def user2_page():
+    return render_template("user2.html")
+
 # ─────────────────────────────────────────────
-#  SOCKETIO EVENTS
+#  SOCKETIO — ROOM / ROLE EVENTS
 # ─────────────────────────────────────────────
 @socketio.on("connect")
 def on_connect():
-    sid = request_sid()
+    sid = flask_request.sid
     get_session(sid)
     print(f"[+] Client connected: {sid}")
     emit("server_info", {
@@ -181,7 +212,16 @@ def on_connect():
 
 @socketio.on("disconnect")
 def on_disconnect():
-    sid = request_sid()
+    sid = flask_request.sid
+    # Clean up room membership
+    room_code, room = find_room_by_sid(sid)
+    if room:
+        role = "user1" if room["user1"] == sid else "user2"
+        room[role] = None
+        # Notify the other user
+        socketio.emit("partner_disconnected", {"role": role}, room=room_code)
+        print(f"[-] {role} left room {room_code}")
+
     if sid in sessions:
         try:
             sessions[sid]["hands"].close()
@@ -190,9 +230,65 @@ def on_disconnect():
         del sessions[sid]
     print(f"[-] Client disconnected: {sid}")
 
+@socketio.on("join_room_as")
+def on_join_room(data):
+    """
+    data: { room_code: str, role: "user1"|"user2" }
+    """
+    sid       = flask_request.sid
+    s         = get_session(sid)
+    role      = data.get("role")
+    room_code = data.get("room_code", "default").strip().upper()
+
+    if not room_code:
+        room_code = "DEFAULT"
+
+    room = get_or_create_room(room_code)
+
+    # Check if role already taken
+    if role == "user1" and room["user1"] and room["user1"] != sid:
+        emit("room_error", {"msg": "User 1 sudah ada di room ini. Coba kode room lain."})
+        return
+    if role == "user2" and room["user2"] and room["user2"] != sid:
+        emit("room_error", {"msg": "User 2 sudah ada di room ini. Coba kode room lain."})
+        return
+
+    # Leave previous room if any
+    prev_code, prev_room = find_room_by_sid(sid)
+    if prev_code and prev_code != room_code:
+        prev_role = "user1" if prev_room["user1"] == sid else "user2"
+        prev_room[prev_role] = None
+        leave_room(prev_code)
+
+    # Join new room
+    room[role]       = sid
+    s["role"]        = role
+    s["room_code"]   = room_code
+
+    join_room(room_code)
+
+    print(f"[ROOM] {role} joined room '{room_code}' (sid={sid})")
+
+    # Emit success to joiner
+    emit("room_joined", {
+        "room_code":   room_code,
+        "role":        role,
+        "translation": room["translation"],
+        "speech":      room["speech"],
+        "partner_online": (room["user2" if role == "user1" else "user1"] is not None),
+    })
+
+    # Notify partner
+    partner_sid = room["user2" if role == "user1" else "user1"]
+    if partner_sid:
+        socketio.emit("partner_connected", {"role": role}, room=room_code, skip_sid=sid)
+
+# ─────────────────────────────────────────────
+#  SOCKETIO — USER1 EVENTS (isyarat)
+# ─────────────────────────────────────────────
 @socketio.on("set_mode")
 def on_set_mode(data):
-    sid  = request_sid()
+    sid  = flask_request.sid
     s    = get_session(sid)
     mode = data.get("mode", "IMAGE")
     if mode == "IMAGE" and model_img is None:
@@ -201,7 +297,6 @@ def on_set_mode(data):
     if mode == "VIDEO" and model_vid is None:
         emit("error", {"msg": "Model video tidak tersedia"})
         return
-    # Reset semua state saat ganti mode
     s["mode"]          = mode
     s["sequence"]      = []
     s["collecting"]    = False
@@ -216,18 +311,26 @@ def on_set_mode(data):
 
 @socketio.on("clear_translation")
 def on_clear():
-    sid = request_sid()
-    s   = get_session(sid)
-    s["translation"] = ""
-    s["last_label"]  = None
+    sid       = flask_request.sid
+    s         = get_session(sid)
+    room_code = s.get("room_code")
+
+    if room_code and room_code in rooms:
+        rooms[room_code]["translation"] = ""
+
+    s["last_label"] = None
     emit("translation_update", {"text": ""})
+
+    # Also tell user2 in the room
+    if room_code:
+        socketio.emit("sign_translation", {"text": ""}, room=room_code, skip_sid=sid)
 
 @socketio.on("frame")
 def on_frame(data):
-    sid = request_sid()
-    s   = get_session(sid)
+    sid       = flask_request.sid
+    s         = get_session(sid)
+    room_code = s.get("room_code")
 
-    # Decode base64 frame dari browser
     try:
         img_data = base64.b64decode(data["image"].split(",")[1])
         np_arr   = np.frombuffer(img_data, np.uint8)
@@ -243,6 +346,8 @@ def on_frame(data):
 
     hand_detected = res.multi_hand_landmarks is not None
     mode          = s["mode"]
+
+    translation_updated = False
 
     # ── MODE GAMBAR ──
     if mode == "IMAGE" and model_img is not None:
@@ -264,10 +369,15 @@ def on_frame(data):
             s["current_label"] = voted if conf >= CONF_THRESHOLD else "?" + voted
 
             if conf >= CONF_THRESHOLD and s["debounce"] == 0 and voted != s["last_label"]:
-                s["translation"] += voted
-                s["last_label"]   = voted
-                s["debounce"]     = DEBOUNCE_FRAMES
-                emit("translation_update", {"text": s["translation"]})
+                if room_code and room_code in rooms:
+                    rooms[room_code]["translation"] += voted
+                    new_text = rooms[room_code]["translation"]
+                else:
+                    new_text = voted
+                s["last_label"]  = voted
+                s["debounce"]    = DEBOUNCE_FRAMES
+                translation_updated = True
+                emit("translation_update", {"text": new_text})
         else:
             s["no_hand_count"] += 1
             if s["no_hand_count"] > 10:
@@ -285,14 +395,12 @@ def on_frame(data):
             s["collecting"]    = True
             s["sequence"].append(combined)
 
-            # Batasi panjang sequence agar tidak membengkak di memori
             if len(s["sequence"]) > SEQ_LEN * 3:
                 s["sequence"] = s["sequence"][-SEQ_LEN:]
 
             seq_len = len(s["sequence"])
             emit("seq_progress", {"current": min(seq_len, SEQ_LEN), "total": SEQ_LEN})
 
-            # Baru predict kalau sudah cukup frame
             if seq_len >= SEQ_LEN:
                 inp  = np.array(s["sequence"][-SEQ_LEN:], dtype=np.float32).reshape(1, SEQ_LEN, FEATURE_DIM)
                 pred = model_vid.predict(inp, verbose=0)[0]
@@ -310,12 +418,16 @@ def on_frame(data):
                 s["current_label"] = voted if conf >= CONF_THRESHOLD else "?" + voted
 
                 if conf >= CONF_THRESHOLD and s["debounce"] == 0 and voted != s["last_label"]:
-                    s["translation"] += voted + " "
-                    s["last_label"]   = voted
-                    s["debounce"]     = DEBOUNCE_FRAMES * 2
-                    emit("translation_update", {"text": s["translation"]})
+                    if room_code and room_code in rooms:
+                        rooms[room_code]["translation"] += voted + " "
+                        new_text = rooms[room_code]["translation"]
+                    else:
+                        new_text = voted + " "
+                    s["last_label"]  = voted
+                    s["debounce"]    = DEBOUNCE_FRAMES * 2
+                    translation_updated = True
+                    emit("translation_update", {"text": new_text})
 
-                # Sliding window: buang separuh frame lama
                 s["sequence"] = s["sequence"][SEQ_LEN // 2:]
 
         else:
@@ -324,7 +436,6 @@ def on_frame(data):
             emit("seq_progress", {"current": min(seq_len, SEQ_LEN), "total": SEQ_LEN})
 
             if s["no_hand_count"] > 15:
-                # FIX: hanya predict kalau sequence cukup
                 if s["collecting"] and seq_len >= SEQ_LEN:
                     inp  = np.array(s["sequence"][-SEQ_LEN:], dtype=np.float32).reshape(1, SEQ_LEN, FEATURE_DIM)
                     pred = model_vid.predict(inp, verbose=0)[0]
@@ -334,12 +445,16 @@ def on_frame(data):
                     s["current_conf"]  = conf
                     s["current_label"] = pred_label if conf >= CONF_THRESHOLD else "?" + pred_label
                     if conf >= CONF_THRESHOLD and s["debounce"] == 0 and pred_label != s["last_label"]:
-                        s["translation"] += pred_label + " "
-                        s["last_label"]   = pred_label
-                        s["debounce"]     = DEBOUNCE_FRAMES * 2
-                        emit("translation_update", {"text": s["translation"]})
+                        if room_code and room_code in rooms:
+                            rooms[room_code]["translation"] += pred_label + " "
+                            new_text = rooms[room_code]["translation"]
+                        else:
+                            new_text = pred_label + " "
+                        s["last_label"]  = pred_label
+                        s["debounce"]    = DEBOUNCE_FRAMES * 2
+                        translation_updated = True
+                        emit("translation_update", {"text": new_text})
 
-                # Reset state setelah tangan hilang
                 s["collecting"]    = False
                 s["sequence"]      = []
                 s["prob_buffer"].clear()
@@ -351,7 +466,12 @@ def on_frame(data):
     if s["debounce"] > 0:
         s["debounce"] -= 1
 
-    # Encode frame kembali ke JPEG untuk ditampilkan di browser
+    # Broadcast new translation to user2 in same room
+    if translation_updated and room_code and room_code in rooms:
+        new_text = rooms[room_code]["translation"]
+        socketio.emit("sign_translation", {"text": new_text}, room=room_code, skip_sid=sid)
+
+    # Encode frame
     _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
     frame_b64 = "data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode()
 
@@ -363,11 +483,43 @@ def on_frame(data):
         "frame":         frame_b64,
     })
 
-# Helper untuk mendapatkan SID dari context SocketIO
-from flask import request as flask_request
+# ─────────────────────────────────────────────
+#  SOCKETIO — USER2 EVENTS (speech-to-text)
+# ─────────────────────────────────────────────
+@socketio.on("speech_result")
+def on_speech_result(data):
+    """
+    User2 mengirim hasil speech-to-text ke User1.
+    data: { text: str, is_final: bool }
+    """
+    sid       = flask_request.sid
+    s         = get_session(sid)
+    room_code = s.get("room_code")
+    text      = data.get("text", "")
+    is_final  = data.get("is_final", False)
 
-def request_sid():
-    return flask_request.sid
+    if is_final and room_code and room_code in rooms:
+        rooms[room_code]["speech"] = text
+
+    if room_code:
+        # Send to user1 in the room
+        socketio.emit("speech_update", {
+            "text":     text,
+            "is_final": is_final,
+        }, room=room_code, skip_sid=sid)
+
+@socketio.on("clear_speech")
+def on_clear_speech():
+    sid       = flask_request.sid
+    s         = get_session(sid)
+    room_code = s.get("room_code")
+
+    if room_code and room_code in rooms:
+        rooms[room_code]["speech"] = ""
+
+    emit("speech_update", {"text": "", "is_final": True})
+    if room_code:
+        socketio.emit("speech_update", {"text": "", "is_final": True}, room=room_code, skip_sid=sid)
 
 # ─────────────────────────────────────────────
 #  ENTRY POINT

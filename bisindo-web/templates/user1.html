@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>BISINDO — User 1 (Pengguna Isyarat)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #080c08;
+  --surface:   #0f170f;
+  --surface2:  #141e14;
+  --border:    #1e2e1e;
+  --green:     #39ff6e;
+  --green-dim: #1a4028;
+  --teal:      #00e5cc;
+  --yellow:    #f5e642;
+  --orange:    #ff9b3a;
+  --red:       #ff5252;
+  --gray:      #557055;
+  --white:     #eef5ee;
+  --mono:      'Space Mono', monospace;
+  --ui:        'Syne', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; }
+
+body {
+  background: var(--bg);
+  color: var(--white);
+  font-family: var(--mono);
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+/* ── TOP BAR ── */
+.top-bar {
+  background: #0a120a;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.back-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--gray);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 3px;
+  text-decoration: none;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.back-btn:hover { border-color: var(--green); color: var(--green); }
+
+.brand {
+  font-family: var(--ui);
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--green);
+  flex: 1;
+}
+.brand span { color: var(--teal); font-size: 0.7rem; font-weight: 400; }
+
+.room-badge {
+  font-size: 0.62rem;
+  background: var(--green-dim);
+  border: 1px solid var(--green);
+  color: var(--green);
+  padding: 3px 9px;
+  border-radius: 2px;
+  letter-spacing: 0.1em;
+}
+
+.partner-pill {
+  font-size: 0.6rem;
+  padding: 3px 9px;
+  border-radius: 20px;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--border);
+  color: var(--gray);
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+.partner-pill.online { border-color: var(--teal); color: var(--teal); background: rgba(0,229,204,0.08); }
+
+/* ── MODE CONTROLS ── */
+.mode-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-mode {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--gray);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  padding: 6px 14px;
+  cursor: pointer;
+  border-radius: 3px;
+  letter-spacing: 0.08em;
+  transition: all 0.15s;
+  text-transform: uppercase;
+}
+.btn-mode:hover:not(:disabled) { border-color: var(--yellow); color: var(--yellow); }
+.btn-mode.active { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+.btn-mode:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.btn-clear {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--gray);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  letter-spacing: 0.06em;
+  transition: all 0.15s;
+}
+.btn-clear:hover { border-color: var(--teal); color: var(--teal); }
+
+.hand-pill {
+  margin-left: auto;
+  font-size: 0.62rem;
+  color: var(--gray);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.hand-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.hand-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+/* ── TRANSLATION BAR ── */
+.translation-bar {
+  background: #060e06;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 48px;
+}
+.tl-label {
+  font-size: 0.58rem;
+  color: var(--teal);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  padding-top: 2px;
+}
+.tl-text {
+  font-size: 0.9rem;
+  color: var(--green);
+  font-weight: 700;
+  flex: 1;
+  word-break: break-all;
+  line-height: 1.5;
+}
+.tl-text.empty { color: var(--gray); font-weight: 400; font-style: italic; font-size: 0.75rem; }
+
+/* ── SPEECH FROM USER2 ── */
+.speech-bar {
+  background: #060e12;
+  border-bottom: 1px solid #1a2a3a;
+  padding: 10px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 48px;
+  transition: background 0.3s;
+}
+.speech-bar.incoming { background: #080f18; }
+
+.sp-label {
+  font-size: 0.58rem;
+  color: #4dd8ff;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  padding-top: 2px;
+}
+.sp-text {
+  font-size: 0.88rem;
+  color: #6ee8ff;
+  flex: 1;
+  word-break: break-word;
+  line-height: 1.5;
+}
+.sp-text.empty { color: var(--gray); font-style: italic; font-size: 0.72rem; }
+.sp-text.interim { color: #4dd8ff; opacity: 0.7; }
+
+/* ── MAIN LAYOUT ── */
+.main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── VIDEO ── */
+.video-wrap {
+  position: relative;
+  background: #030503;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  aspect-ratio: 4/3;
+  max-height: calc(100vh - 280px);
+}
+
+#canvasDisplay {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.video-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.88);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+}
+.overlay-icon { font-size: 2.4rem; }
+.overlay-text {
+  font-size: 0.75rem;
+  color: var(--gray);
+  text-align: center;
+  line-height: 1.8;
+  max-width: 260px;
+}
+.btn-start {
+  background: var(--green-dim);
+  border: 1px solid var(--green);
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  padding: 12px 26px;
+  cursor: pointer;
+  border-radius: 3px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: all 0.2s;
+}
+.btn-start:hover { background: #256b35; box-shadow: 0 0 20px rgba(57,255,110,0.25); }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pred-panel {
+  padding: 18px 16px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.pred-small {
+  font-size: 0.58rem;
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 6px;
+}
+.pred-big {
+  font-family: var(--ui);
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--green);
+  line-height: 1;
+  min-height: 3.2rem;
+  transition: color 0.2s;
+}
+.pred-big.low  { color: var(--yellow); }
+.pred-big.vlow { color: var(--orange); }
+.pred-big.empty { color: var(--border); font-weight: 400; }
+
+.conf-wrap { margin-top: 14px; }
+.conf-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  color: var(--gray);
+  margin-bottom: 5px;
+}
+.conf-bg {
+  height: 7px;
+  background: var(--surface2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.conf-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--green);
+  border-radius: 2px;
+  transition: width 0.15s, background 0.15s;
+}
+
+.seq-wrap { margin-top: 10px; display: none; }
+.seq-wrap.visible { display: block; }
+.seq-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  color: var(--teal);
+  margin-bottom: 5px;
+}
+.seq-bg {
+  height: 5px;
+  background: var(--surface2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.seq-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--teal);
+  border-radius: 2px;
+  transition: width 0.1s;
+}
+
+.classes-panel {
+  padding: 14px 16px;
+  flex: 1;
+  overflow-y: auto;
+}
+.classes-panel::-webkit-scrollbar { width: 3px; }
+.classes-panel::-webkit-scrollbar-thumb { background: var(--border); }
+
+.cls-label {
+  font-size: 0.58rem;
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+.cls-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.cls-badge {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--gray);
+  font-size: 0.6rem;
+  padding: 2px 7px;
+  border-radius: 2px;
+  transition: all 0.15s;
+}
+.cls-badge.hi {
+  background: #152a1e;
+  border-color: var(--green);
+  color: var(--green);
+  box-shadow: 0 0 6px rgba(57,255,110,0.2);
+}
+
+.stats-panel {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.stat-val { font-size: 1rem; font-weight: 700; }
+.stat-key { font-size: 0.55rem; color: var(--gray); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 1px; }
+
+.status-log {
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  background: #060c06;
+}
+.status-line {
+  font-size: 0.6rem;
+  color: var(--gray);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.status-line.ok   { color: var(--green); }
+.status-line.err  { color: var(--red);   }
+.status-line.info { color: var(--teal);  }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: var(--surface);
+  border: 1px solid var(--teal);
+  color: var(--teal);
+  font-size: 0.72rem;
+  padding: 10px 20px;
+  border-radius: 3px;
+  letter-spacing: 0.06em;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  z-index: 200;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── MOBILE ── */
+@media (max-width: 680px) {
+  .main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+  .video-wrap {
+    aspect-ratio: 4/3;
+    max-height: 56vw;
+    width: 100%;
+  }
+  .sidebar {
+    border-left: none;
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr auto auto;
+    max-height: none;
+  }
+  .pred-panel {
+    grid-column: 1;
+    grid-row: 1;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .classes-panel {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    border-bottom: 1px solid var(--border);
+    max-height: 180px;
+  }
+  .stats-panel {
+    grid-column: 1;
+    grid-row: 2;
+    border-right: 1px solid var(--border);
+  }
+  .status-log {
+    grid-column: 1 / 3;
+    grid-row: 3;
+  }
+  .pred-big { font-size: 2.4rem; }
+}
+
+@media (max-width: 400px) {
+  .top-bar { gap: 7px; }
+  .brand { font-size: 0.85rem; }
+  .sidebar { grid-template-columns: 1fr; }
+  .pred-panel { grid-column: 1; border-right: none; }
+  .classes-panel { grid-column: 1; grid-row: 2; max-height: 120px; }
+  .stats-panel { grid-column: 1; grid-row: 3; border-right: none; }
+  .status-log { grid-column: 1; grid-row: 4; }
+}
+</style>
+</head>
+<body>
+
+<video id="videoEl" autoplay playsinline muted style="display:none"></video>
+<canvas id="captureCanvas" style="display:none"></canvas>
+
+<!-- TOP BAR -->
+<div class="top-bar">
+  <a href="/" class="back-btn">← Lobby</a>
+  <div class="brand">BISINDO <span>/ User 1 — Pengguna Isyarat</span></div>
+  <div class="room-badge" id="roomBadge">ROOM: --</div>
+  <div class="partner-pill" id="partnerPill">● User 2: Offline</div>
+</div>
+
+<!-- MODE BAR -->
+<div class="mode-bar">
+  <button class="btn-mode active" id="btnImage"
+    {% if 'IMAGE' not in available_modes %}disabled{% endif %}
+    onclick="setMode('IMAGE')">[I] Gambar</button>
+  <button class="btn-mode" id="btnVideo"
+    {% if 'VIDEO' not in available_modes %}disabled{% endif %}
+    onclick="setMode('VIDEO')">[V] Video</button>
+  <button class="btn-clear" onclick="clearTranslation()">[C] Clear</button>
+  <div class="hand-pill">
+    <div class="hand-dot" id="handDot"></div>
+    <span id="handTxt">--</span>
+  </div>
+</div>
+
+<!-- MY TRANSLATION BAR -->
+<div class="translation-bar">
+  <span class="tl-label">Isyarat→</span>
+  <div class="tl-text empty" id="translationEl">(belum ada isyarat)</div>
+</div>
+
+<!-- SPEECH FROM USER2 -->
+<div class="speech-bar" id="speechBar">
+  <span class="sp-label">🎙 User2→</span>
+  <div class="sp-text empty" id="speechEl">(menunggu balasan...)</div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="video-wrap">
+    <img id="canvasDisplay" src="" alt="" style="display:none">
+    <div class="video-overlay" id="startOverlay">
+      <div class="overlay-icon">🤟</div>
+      <p class="overlay-text">
+        Aktifkan kamera untuk mulai mendeteksi gestur bahasa isyarat BISINDO.<br>
+        <span style="color:#2a4a2a;font-size:0.65rem">
+          {% if available_modes %}Mode: {{ available_modes | join(', ') }}{% else %}⚠ Tidak ada model tersedia{% endif %}
+        </span>
+      </p>
+      <button class="btn-start" onclick="startCamera()">▶ Aktifkan Kamera</button>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="pred-panel">
+      <div class="pred-small">Prediksi</div>
+      <div class="pred-big empty" id="predLabel">---</div>
+      <div class="conf-wrap">
+        <div class="conf-header">
+          <span>Confidence</span>
+          <span id="confPct">0.0%</span>
+        </div>
+        <div class="conf-bg"><div class="conf-fill" id="confFill"></div></div>
+      </div>
+      <div class="seq-wrap" id="seqWrap">
+        <div class="seq-header">
+          <span>Sequence</span>
+          <span id="seqPct">0/30</span>
+        </div>
+        <div class="seq-bg"><div class="seq-fill" id="seqFill"></div></div>
+      </div>
+    </div>
+
+    <div class="classes-panel">
+      <div class="cls-label" id="clsLabel">Kelas</div>
+      <div class="cls-grid" id="clsGrid">
+        {% for c in image_classes %}
+          <span class="cls-badge" data-class="{{ c }}">{{ c }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="stats-panel">
+      <div>
+        <div class="stat-val" id="statCount">0</div>
+        <div class="stat-key">Kata/Huruf</div>
+      </div>
+      <div>
+        <div class="stat-val" id="statFps">--</div>
+        <div class="stat-key">FPS</div>
+      </div>
+    </div>
+
+    <div class="status-log">
+      <div class="status-line info" id="statusLine">● Menunggu kamera...</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── ROOM PARAMS ───
+const params   = new URLSearchParams(location.search);
+const ROOM     = (params.get('room') || 'DEFAULT').toUpperCase();
+document.getElementById('roomBadge').textContent = 'ROOM: ' + ROOM;
+
+// ─── SOCKET ───
+const socket = io();
+let currentMode = 'IMAGE';
+let isRunning   = false;
+let frameTimer  = null;
+let fpsCounter  = 0;
+let fpsTimer    = null;
+
+const imageClasses = {{ image_classes | tojson }};
+const videoClasses = {{ video_classes | tojson }};
+
+// DOM
+const videoEl       = document.getElementById('videoEl');
+const captureCanvas = document.getElementById('captureCanvas');
+const canvasDisplay = document.getElementById('canvasDisplay');
+const startOverlay  = document.getElementById('startOverlay');
+const predLabel     = document.getElementById('predLabel');
+const confFill      = document.getElementById('confFill');
+const confPct       = document.getElementById('confPct');
+const seqWrap       = document.getElementById('seqWrap');
+const seqFill       = document.getElementById('seqFill');
+const seqPct        = document.getElementById('seqPct');
+const translationEl = document.getElementById('translationEl');
+const speechEl      = document.getElementById('speechEl');
+const speechBar     = document.getElementById('speechBar');
+const handDot       = document.getElementById('handDot');
+const handTxt       = document.getElementById('handTxt');
+const clsGrid       = document.getElementById('clsGrid');
+const clsLabel      = document.getElementById('clsLabel');
+const statusLine    = document.getElementById('statusLine');
+const statCount     = document.getElementById('statCount');
+const statFps       = document.getElementById('statFps');
+const toast         = document.getElementById('toast');
+const partnerPill   = document.getElementById('partnerPill');
+
+// ─── SOCKET EVENTS ───
+socket.on('connect', () => {
+  setStatus('● Terhubung — bergabung ke room...', 'info');
+  socket.emit('join_room_as', { room_code: ROOM, role: 'user1' });
+});
+
+socket.on('disconnect', () => setStatus('● Koneksi terputus', 'err'));
+
+socket.on('room_joined', (data) => {
+  setStatus(`● Room ${data.room_code} — siap`, 'ok');
+  updatePartner(data.partner_online);
+  showToast(`Bergabung ke room ${data.room_code}`);
+});
+
+socket.on('room_error', (data) => {
+  setStatus('● ' + data.msg, 'err');
+  showToast('⚠ ' + data.msg, true);
+});
+
+socket.on('partner_connected', () => {
+  updatePartner(true);
+  showToast('User 2 bergabung ke room');
+});
+
+socket.on('partner_disconnected', () => {
+  updatePartner(false);
+  showToast('User 2 meninggalkan room');
+});
+
+socket.on('prediction', (data) => {
+  updatePrediction(data);
+  if (data.frame) {
+    canvasDisplay.src = data.frame;
+    canvasDisplay.style.display = 'block';
+  }
+  fpsCounter++;
+});
+
+socket.on('translation_update', (data) => {
+  updateTranslation(data.text);
+});
+
+socket.on('mode_changed', (data) => {
+  currentMode = data.mode;
+  updateModeUI();
+  showToast('Mode ' + (data.mode === 'IMAGE' ? 'Gambar' : 'Video') + ' aktif');
+});
+
+socket.on('seq_progress', (data) => {
+  const pct = (data.current / data.total * 100).toFixed(0);
+  seqFill.style.width = pct + '%';
+  seqPct.textContent  = `${data.current}/${data.total}`;
+});
+
+// Speech from User2
+socket.on('speech_update', (data) => {
+  const text = data.text || '';
+  if (text.trim() === '') {
+    speechEl.textContent = '(menunggu balasan...)';
+    speechEl.className   = 'sp-text empty';
+    speechBar.classList.remove('incoming');
+  } else {
+    speechEl.textContent = text;
+    speechEl.className   = data.is_final ? 'sp-text' : 'sp-text interim';
+    speechBar.classList.add('incoming');
+    if (data.is_final) {
+      setTimeout(() => speechBar.classList.remove('incoming'), 800);
+    }
+  }
+});
+
+socket.on('error', (data) => showToast('⚠ ' + data.msg, true));
+
+// ─── CAMERA ───
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: 'user' }, audio: false
+    });
+    videoEl.srcObject = stream;
+    await videoEl.play();
+    captureCanvas.width  = 640;
+    captureCanvas.height = 480;
+    startOverlay.style.display = 'none';
+    canvasDisplay.style.display = 'block';
+    isRunning = true;
+    setStatus('● Kamera aktif — deteksi berjalan', 'ok');
+    fpsTimer = setInterval(() => { statFps.textContent = fpsCounter; fpsCounter = 0; }, 1000);
+    sendFrame();
+  } catch (err) {
+    setStatus('● Kamera error: ' + err.message, 'err');
+    showToast('Gagal akses kamera', true);
+  }
+}
+
+function sendFrame() {
+  if (!isRunning) return;
+  const ctx = captureCanvas.getContext('2d');
+  ctx.drawImage(videoEl, 0, 0, 640, 480);
+  const b64 = captureCanvas.toDataURL('image/jpeg', 0.7);
+  socket.emit('frame', { image: b64 });
+  frameTimer = setTimeout(sendFrame, 50);
+}
+
+// ─── UI ───
+function updatePrediction(data) {
+  const { label, conf, hand_detected } = data;
+  handDot.classList.toggle('active', hand_detected);
+  handTxt.textContent = hand_detected ? 'OK ✓' : '--';
+  predLabel.textContent = label;
+  predLabel.className = 'pred-big';
+  if (!label || label === '---') predLabel.classList.add('empty');
+  else if (conf < 40) predLabel.classList.add('vlow');
+  else if (conf < 60) predLabel.classList.add('low');
+  const color = conf >= 40 ? 'var(--green)' : conf >= 24 ? 'var(--yellow)' : 'var(--orange)';
+  confFill.style.width      = Math.min(conf, 100) + '%';
+  confFill.style.background = color;
+  confPct.textContent = conf.toFixed(1) + '%';
+  document.querySelectorAll('.cls-badge').forEach(b =>
+    b.classList.toggle('hi', b.dataset.class === label));
+}
+
+function updateTranslation(text) {
+  if (text && text.trim()) {
+    translationEl.textContent = text;
+    translationEl.className   = 'tl-text';
+    const cnt = currentMode === 'IMAGE'
+      ? text.replace(/\s/g,'').length
+      : text.trim().split(/\s+/).filter(Boolean).length;
+    statCount.textContent = cnt;
+  } else {
+    translationEl.textContent = '(belum ada isyarat)';
+    translationEl.className   = 'tl-text empty';
+    statCount.textContent     = '0';
+  }
+}
+
+function updateModeUI() {
+  document.getElementById('btnImage').classList.toggle('active', currentMode === 'IMAGE');
+  document.getElementById('btnVideo').classList.toggle('active', currentMode === 'VIDEO');
+  seqWrap.classList.toggle('visible', currentMode === 'VIDEO');
+  const classes = currentMode === 'IMAGE' ? imageClasses : videoClasses;
+  clsLabel.textContent = (currentMode === 'IMAGE' ? 'Huruf' : 'Kata') + ' (' + classes.length + ')';
+  clsGrid.innerHTML = '';
+  classes.forEach(c => {
+    const s = document.createElement('span');
+    s.className = 'cls-badge';
+    s.dataset.class = c;
+    s.textContent = c;
+    clsGrid.appendChild(s);
+  });
+}
+
+function updatePartner(online) {
+  partnerPill.textContent = online ? '● User 2: Online' : '● User 2: Offline';
+  partnerPill.classList.toggle('online', online);
+}
+
+function setMode(mode) {
+  if (mode === currentMode) return;
+  socket.emit('set_mode', { mode });
+}
+
+function clearTranslation() {
+  socket.emit('clear_translation');
+  updateTranslation('');
+  showToast('Isyarat dikosongkan');
+}
+
+function setStatus(msg, type = '') {
+  statusLine.textContent = msg;
+  statusLine.className   = 'status-line ' + type;
+}
+
+let toastTimer;
+function showToast(msg, err = false) {
+  toast.textContent = msg;
+  toast.style.borderColor = err ? 'var(--red)' : 'var(--teal)';
+  toast.style.color       = err ? 'var(--red)' : 'var(--teal)';
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+document.addEventListener('keydown', e => {
+  if (!isRunning) return;
+  const k = e.key.toLowerCase();
+  if (k === 'i') setMode('IMAGE');
+  else if (k === 'v') setMode('VIDEO');
+  else if (k === 'c') clearTranslation();
+});
+
+updateModeUI();
+</script>
+</body>
+</html>

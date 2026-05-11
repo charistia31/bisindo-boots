@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BISINDO — Pilih Peran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #080c08;
+  --green: #39ff6e;
+  --green-dim: #1a4028;
+  --teal: #00e5cc;
+  --yellow: #f5e642;
+  --surface: #0f170f;
+  --border: #1e2e1e;
+  --gray: #556855;
+  --white: #eef5ee;
+  --mono: 'Space Mono', monospace;
+  --ui: 'Syne', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--white);
+  font-family: var(--mono);
+  overflow-x: hidden;
+}
+
+/* noise grain overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 999;
+}
+
+.wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  position: relative;
+}
+
+/* decorative grid lines */
+.wrapper::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(57,255,110,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(57,255,110,0.03) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+}
+
+/* ── HEADER ── */
+.header {
+  text-align: center;
+  margin-bottom: 48px;
+  animation: fadeUp 0.6s ease both;
+}
+
+.logo-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.logo-bracket {
+  font-family: var(--mono);
+  font-size: 1.6rem;
+  color: var(--green);
+  opacity: 0.5;
+}
+
+.logo-text {
+  font-family: var(--ui);
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--green) 0%, var(--teal) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.tagline {
+  font-size: 0.72rem;
+  color: var(--gray);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* ── ROOM FORM ── */
+.room-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 28px 24px;
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: 32px;
+  animation: fadeUp 0.6s 0.1s ease both;
+  position: relative;
+  z-index: 1;
+}
+
+.form-label {
+  font-size: 0.62rem;
+  color: var(--teal);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.room-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--white);
+  font-family: var(--mono);
+  font-size: 1.1rem;
+  letter-spacing: 0.2em;
+  padding: 14px 16px;
+  border-radius: 3px;
+  outline: none;
+  text-transform: uppercase;
+  transition: border-color 0.2s;
+}
+.room-input::placeholder { color: var(--gray); letter-spacing: 0.1em; }
+.room-input:focus { border-color: var(--green); }
+
+.form-hint {
+  font-size: 0.6rem;
+  color: var(--gray);
+  margin-top: 6px;
+  letter-spacing: 0.05em;
+}
+
+/* ── ROLE CARDS ── */
+.cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+  max-width: 680px;
+  animation: fadeUp 0.6s 0.2s ease both;
+  position: relative;
+  z-index: 1;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 28px 20px 24px;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: transparent;
+  transition: background 0.2s;
+}
+
+.card-1::before { background: var(--green); }
+.card-2::before { background: var(--teal); }
+
+.card:hover {
+  transform: translateY(-2px);
+}
+.card-1:hover { border-color: var(--green); box-shadow: 0 8px 32px rgba(57,255,110,0.1); }
+.card-2:hover { border-color: var(--teal);  box-shadow: 0 8px 32px rgba(0,229,204,0.1);  }
+
+.card-icon {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.card-number {
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.card-1 .card-number { color: var(--green); }
+.card-2 .card-number { color: var(--teal); }
+
+.card-title {
+  font-family: var(--ui);
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.card-desc {
+  font-size: 0.7rem;
+  color: var(--gray);
+  line-height: 1.7;
+}
+
+.card-features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 4px;
+}
+.card-features li {
+  font-size: 0.65rem;
+  color: var(--gray);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.card-features li::before {
+  content: '▸';
+  font-size: 0.6rem;
+}
+.card-1 .card-features li::before { color: var(--green); }
+.card-2 .card-features li::before { color: var(--teal); }
+
+.card-cta {
+  margin-top: auto;
+  padding-top: 16px;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.card-1 .card-cta { color: var(--green); }
+.card-2 .card-cta { color: var(--teal); }
+
+.cta-arrow {
+  transition: transform 0.2s;
+}
+.card:hover .cta-arrow { transform: translateX(4px); }
+
+/* ── ERROR MSG ── */
+.error-msg {
+  font-size: 0.7rem;
+  color: #ff6b6b;
+  text-align: center;
+  margin-top: 8px;
+  min-height: 1.2em;
+  animation: fadeUp 0.3s ease;
+}
+
+/* ── FOOTER ── */
+.footer {
+  margin-top: 40px;
+  font-size: 0.6rem;
+  color: #2a3a2a;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  animation: fadeUp 0.6s 0.3s ease both;
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── MOBILE ── */
+@media (max-width: 540px) {
+  .logo-text { font-size: 1.9rem; }
+  .cards { grid-template-columns: 1fr; gap: 10px; }
+  .card { padding: 22px 18px 20px; }
+  .card-title { font-size: 1.15rem; }
+  .room-form { padding: 22px 18px; }
+}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <div class="header">
+    <div class="logo-mark">
+      <span class="logo-bracket">[</span>
+      <span class="logo-text">BISINDO</span>
+      <span class="logo-bracket">]</span>
+    </div>
+    <p class="tagline">Real-Time Sign Language Translator</p>
+  </div>
+
+  <!-- Room Code -->
+  <div class="room-form">
+    <label class="form-label" for="roomCode">Kode Room</label>
+    <input
+      type="text"
+      id="roomCode"
+      class="room-input"
+      placeholder="MASUKKAN KODE..."
+      maxlength="12"
+      autocomplete="off"
+      spellcheck="false"
+    >
+    <p class="form-hint">User 1 &amp; User 2 harus menggunakan kode room yang sama agar terhubung.</p>
+    <p class="error-msg" id="errMsg"></p>
+  </div>
+
+  <!-- Role Selection -->
+  <div class="cards">
+
+    <a class="card card-1" href="#" onclick="enterAs('user1'); return false;" id="btn1">
+      <div class="card-icon">🤟</div>
+      <div class="card-number">Peran 01</div>
+      <div class="card-title">Pengguna Isyarat</div>
+      <div class="card-desc">Berkomunikasi menggunakan bahasa isyarat BISINDO lewat kamera.</div>
+      <ul class="card-features">
+        <li>Deteksi gestur real-time</li>
+        <li>Mode huruf &amp; kata</li>
+        <li>Menerima balasan suara</li>
+      </ul>
+      <div class="card-cta">Masuk sebagai User 1 <span class="cta-arrow">→</span></div>
+    </a>
+
+    <a class="card card-2" href="#" onclick="enterAs('user2'); return false;" id="btn2">
+      <div class="card-icon">🎙️</div>
+      <div class="card-number">Peran 02</div>
+      <div class="card-title">Pendengar / Pembicara</div>
+      <div class="card-desc">Terima terjemahan isyarat &amp; balas menggunakan suara (speech-to-text).</div>
+      <ul class="card-features">
+        <li>Lihat terjemahan isyarat</li>
+        <li>Rekam &amp; kirim suara</li>
+        <li>Teks tampil ke User 1</li>
+      </ul>
+      <div class="card-cta">Masuk sebagai User 2 <span class="cta-arrow">→</span></div>
+    </a>
+
+  </div>
+
+  <div class="footer">BISINDO Translator &nbsp;·&nbsp; v2.0</div>
+</div>
+
+<script>
+function enterAs(role) {
+  const code = document.getElementById('roomCode').value.trim().toUpperCase();
+  const err  = document.getElementById('errMsg');
+
+  if (!code || code.length < 2) {
+    err.textContent = '⚠ Masukkan kode room terlebih dahulu (min. 2 karakter).';
+    document.getElementById('roomCode').focus();
+    return;
+  }
+
+  err.textContent = '';
+  const url = `/${role === 'user1' ? 'user1' : 'user2'}?room=${encodeURIComponent(code)}`;
+  window.location.href = url;
+}
+
+// Allow Enter key on room input
+document.getElementById('roomCode').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    const val = this.value.trim();
+    if (val.length >= 2) {
+      // Can't auto-pick role; just focus first card
+      document.getElementById('btn1').focus();
+    }
+  }
+  // Auto uppercase
+  setTimeout(() => { this.value = this.value.toUpperCase(); }, 0);
+});
+</script>
+</body>
+</html>
