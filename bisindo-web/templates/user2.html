@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>BISINDO — User 2 (Pendengar / Pembicara)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #080c08;
+  --surface:   #0f170f;
+  --surface2:  #141e14;
+  --border:    #1e2e1e;
+  --green:     #39ff6e;
+  --green-dim: #1a4028;
+  --teal:      #00e5cc;
+  --teal-dim:  #003a36;
+  --yellow:    #f5e642;
+  --orange:    #ff9b3a;
+  --red:       #ff5252;
+  --blue:      #4dd8ff;
+  --blue-dim:  #0a1f2a;
+  --gray:      #557055;
+  --white:     #eef5ee;
+  --mono:      'Space Mono', monospace;
+  --ui:        'Syne', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; }
+
+body {
+  background: var(--bg);
+  color: var(--white);
+  font-family: var(--mono);
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+/* noise grain */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.025'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* ── TOP BAR ── */
+.top-bar {
+  background: #09100e;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.back-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--gray);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 3px;
+  text-decoration: none;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.back-btn:hover { border-color: var(--teal); color: var(--teal); }
+
+.brand {
+  font-family: var(--ui);
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--teal);
+  flex: 1;
+}
+.brand span { color: var(--gray); font-size: 0.7rem; font-weight: 400; }
+
+.room-badge {
+  font-size: 0.62rem;
+  background: var(--teal-dim);
+  border: 1px solid var(--teal);
+  color: var(--teal);
+  padding: 3px 9px;
+  border-radius: 2px;
+  letter-spacing: 0.1em;
+}
+
+.partner-pill {
+  font-size: 0.6rem;
+  padding: 3px 9px;
+  border-radius: 20px;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--border);
+  color: var(--gray);
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+.partner-pill.online { border-color: var(--green); color: var(--green); background: rgba(57,255,110,0.07); }
+
+/* ── SIGN TRANSLATION FROM USER1 ── */
+.sign-section {
+  background: #060e06;
+  border-bottom: 1px solid var(--border);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: background 0.4s;
+}
+.sign-section.incoming { background: #081208; }
+
+.sign-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sign-label {
+  font-size: 0.58rem;
+  color: var(--green);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sign-pulse {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.sign-pulse.active {
+  background: var(--green);
+  box-shadow: 0 0 7px var(--green);
+  animation: pulse 1.2s ease infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+.btn-clear-sign {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--gray);
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  padding: 4px 9px;
+  cursor: pointer;
+  border-radius: 3px;
+  letter-spacing: 0.05em;
+  transition: all 0.15s;
+}
+.btn-clear-sign:hover { border-color: var(--green); color: var(--green); }
+
+.sign-display {
+  min-height: 56px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 12px 14px;
+  font-family: var(--ui);
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--green);
+  word-break: break-all;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  transition: border-color 0.3s, color 0.3s;
+  position: relative;
+}
+.sign-display.empty {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--gray);
+  font-style: italic;
+  display: flex;
+  align-items: center;
+}
+.sign-display.has-new { border-color: var(--green); }
+
+/* typing cursor */
+.sign-display::after {
+  content: '█';
+  display: inline-block;
+  font-size: 1rem;
+  color: var(--green);
+  margin-left: 3px;
+  animation: blink 1s step-end infinite;
+  opacity: 0;
+}
+.sign-display.has-new::after { opacity: 0.6; }
+
+@keyframes blink {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 0; }
+}
+
+/* last word highlight */
+.sign-prev { color: rgba(57,255,110,0.5); }
+.sign-last { color: var(--green); }
+
+/* ── MAIN LAYOUT ── */
+.main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── SPEECH PANEL ── */
+.speech-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 14px;
+  gap: 14px;
+  overflow-y: auto;
+  background: #07100e;
+}
+.speech-panel::-webkit-scrollbar { width: 3px; }
+.speech-panel::-webkit-scrollbar-thumb { background: var(--border); }
+
+.section-title {
+  font-size: 0.6rem;
+  color: var(--teal);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* Recognition Result Box */
+.recog-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 14px;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.2s;
+}
+.recog-box.listening { border-color: var(--teal); background: #0a1614; }
+
+.recog-interim {
+  font-size: 0.78rem;
+  color: #4dd8ff;
+  opacity: 0.6;
+  min-height: 1.2em;
+  font-style: italic;
+  line-height: 1.5;
+}
+.recog-final {
+  font-size: 0.9rem;
+  color: var(--white);
+  line-height: 1.6;
+  word-break: break-word;
+}
+.recog-final.empty {
+  color: var(--gray);
+  font-style: italic;
+  font-size: 0.75rem;
+}
+
+/* Send button */
+.send-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.btn-record {
+  flex: 1;
+  background: var(--teal-dim);
+  border: 1px solid var(--teal);
+  color: var(--teal);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  padding: 13px 16px;
+  cursor: pointer;
+  border-radius: 3px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+}
+.btn-record:hover:not(:disabled) {
+  background: #005548;
+  box-shadow: 0 0 20px rgba(0,229,204,0.2);
+}
+.btn-record.recording {
+  background: #1a0505;
+  border-color: var(--red);
+  color: var(--red);
+  animation: recordPulse 1.5s ease infinite;
+}
+.btn-record:disabled { opacity: 0.35; cursor: not-allowed; }
+
+@keyframes recordPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,82,82,0); }
+  50%       { box-shadow: 0 0 0 6px rgba(255,82,82,0.15); }
+}
+
+.btn-record .rec-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.btn-record.recording .rec-dot {
+  animation: dotBlink 0.8s step-end infinite;
+}
+@keyframes dotBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
+}
+
+.btn-send {
+  background: var(--green-dim);
+  border: 1px solid var(--green);
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  padding: 13px 18px;
+  cursor: pointer;
+  border-radius: 3px;
+  letter-spacing: 0.06em;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn-send:hover:not(:disabled) {
+  background: #226633;
+  box-shadow: 0 0 16px rgba(57,255,110,0.2);
+}
+.btn-send:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Manual text input */
+.manual-row {
+  display: flex;
+  gap: 8px;
+}
+
+.text-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--white);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  padding: 10px 13px;
+  border-radius: 3px;
+  outline: none;
+  transition: border-color 0.2s;
+  min-width: 0;
+}
+.text-input::placeholder { color: var(--gray); }
+.text-input:focus { border-color: var(--teal); }
+
+.btn-send-text {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--gray);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn-send-text:hover { border-color: var(--teal); color: var(--teal); }
+
+/* Speech history */
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.history-list::-webkit-scrollbar { width: 3px; }
+.history-list::-webkit-scrollbar-thumb { background: var(--border); }
+
+.history-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--teal);
+  border-radius: 3px;
+  padding: 8px 12px;
+  font-size: 0.72rem;
+  color: var(--white);
+  line-height: 1.5;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.history-time {
+  font-size: 0.55rem;
+  color: var(--gray);
+  white-space: nowrap;
+  padding-top: 2px;
+}
+.history-empty {
+  font-size: 0.65rem;
+  color: var(--gray);
+  font-style: italic;
+  text-align: center;
+  padding: 12px;
+}
+
+/* STT support notice */
+.stt-notice {
+  font-size: 0.62rem;
+  color: var(--gray);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 8px 12px;
+  line-height: 1.7;
+  display: none;
+}
+.stt-notice.show { display: block; }
+.stt-notice a { color: var(--teal); text-decoration: none; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Status panel */
+.status-panel {
+  padding: 18px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.stat-block { display: flex; flex-direction: column; gap: 3px; }
+.stat-val {
+  font-family: var(--ui);
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--teal);
+  line-height: 1;
+}
+.stat-val.idle { color: var(--border); }
+.stat-key { font-size: 0.55rem; color: var(--gray); text-transform: uppercase; letter-spacing: 0.1em; }
+
+/* live indicator */
+.live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+}
+.live-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: all 0.3s;
+}
+.live-dot.active {
+  background: var(--red);
+  box-shadow: 0 0 8px var(--red);
+  animation: pulse 1s ease infinite;
+}
+.live-dot.ready { background: var(--teal); box-shadow: 0 0 6px var(--teal); }
+
+/* volume meter */
+.vol-wrap { display: none; }
+.vol-wrap.visible { display: block; }
+.vol-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  color: var(--teal);
+  margin-bottom: 5px;
+}
+.vol-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 28px;
+}
+.vol-bar {
+  flex: 1;
+  background: var(--teal-dim);
+  border-radius: 1px;
+  min-height: 3px;
+  transition: height 0.08s, background 0.15s;
+}
+
+/* Quick phrases */
+.quick-panel {
+  padding: 14px 16px;
+  flex: 1;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--border);
+}
+.quick-panel::-webkit-scrollbar { width: 3px; }
+.quick-panel::-webkit-scrollbar-thumb { background: var(--border); }
+
+.quick-label {
+  font-size: 0.58rem;
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+.quick-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.quick-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--gray);
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  padding: 7px 10px;
+  cursor: pointer;
+  border-radius: 3px;
+  text-align: left;
+  transition: all 0.15s;
+  letter-spacing: 0.03em;
+  line-height: 1.4;
+}
+.quick-btn:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+  background: #0a1614;
+}
+
+/* stats row */
+.stats-row {
+  padding: 10px 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.stat-mini-val { font-size: 1rem; font-weight: 700; }
+.stat-mini-key { font-size: 0.55rem; color: var(--gray); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 1px; }
+
+/* status log */
+.status-log {
+  padding: 8px 16px;
+  background: #060c0a;
+}
+.status-line {
+  font-size: 0.6rem;
+  color: var(--gray);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.status-line.ok   { color: var(--green); }
+.status-line.err  { color: var(--red);   }
+.status-line.info { color: var(--teal);  }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: var(--surface);
+  border: 1px solid var(--teal);
+  color: var(--teal);
+  font-size: 0.72rem;
+  padding: 10px 20px;
+  border-radius: 3px;
+  letter-spacing: 0.06em;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  z-index: 200;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── MOBILE ── */
+@media (max-width: 680px) {
+  .main {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+  .speech-panel { max-height: 60vh; }
+  .sidebar {
+    border-left: none;
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+  }
+  .status-panel {
+    grid-column: 1;
+    grid-row: 1;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .quick-panel {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    border-bottom: 1px solid var(--border);
+    max-height: 200px;
+  }
+  .stats-row {
+    grid-column: 1;
+    grid-row: 2;
+    border-right: 1px solid var(--border);
+  }
+  .status-log {
+    grid-column: 1 / 3;
+    grid-row: 3;
+  }
+}
+
+@media (max-width: 400px) {
+  .sidebar { grid-template-columns: 1fr; }
+  .status-panel { border-right: none; }
+  .quick-panel { grid-column: 1; grid-row: 2; }
+  .stats-row { grid-column: 1; grid-row: 3; border-right: none; }
+  .status-log { grid-column: 1; grid-row: 4; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="top-bar">
+  <a href="/" class="back-btn">← Lobby</a>
+  <div class="brand">BISINDO <span>/ User 2 — Pendengar & Pembicara</span></div>
+  <div class="room-badge" id="roomBadge">ROOM: --</div>
+  <div class="partner-pill" id="partnerPill">● User 1: Offline</div>
+</div>
+
+<!-- SIGN TRANSLATION FROM USER1 -->
+<div class="sign-section" id="signSection">
+  <div class="sign-header">
+    <div class="sign-label">
+      <div class="sign-pulse" id="signPulse"></div>
+      🤟 Isyarat dari User 1
+    </div>
+    <button class="btn-clear-sign" onclick="clearSignDisplay()">[X] Clear</button>
+  </div>
+  <div class="sign-display empty" id="signDisplay">(menunggu isyarat dari User 1...)</div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- SPEECH PANEL -->
+  <div class="speech-panel">
+
+    <div class="section-title">Balasan Suara Anda</div>
+
+    <!-- STT not supported notice -->
+    <div class="stt-notice" id="sttNotice">
+      ⚠ Browser Anda tidak mendukung Web Speech API secara penuh. Gunakan
+      <a href="https://www.google.com/chrome/" target="_blank">Google Chrome</a> untuk pengalaman terbaik,
+      atau gunakan input teks manual di bawah.
+    </div>
+
+    <!-- Recognized text display -->
+    <div class="recog-box" id="recogBox">
+      <div class="recog-interim" id="recogInterim"></div>
+      <div class="recog-final empty" id="recogFinal">(tekan rekam untuk mulai berbicara...)</div>
+    </div>
+
+    <!-- Record + Send -->
+    <div class="send-row">
+      <button class="btn-record" id="btnRecord" onclick="toggleRecording()">
+        <span class="rec-dot"></span>
+        <span id="btnRecordTxt">● REC</span>
+      </button>
+      <button class="btn-send" id="btnSend" onclick="sendSpeech()" disabled>
+        Kirim →
+      </button>
+    </div>
+
+    <!-- Manual text input -->
+    <div class="section-title">Input Teks Manual</div>
+
+    <div class="manual-row">
+      <input
+        type="text"
+        class="text-input"
+        id="manualInput"
+        placeholder="Ketik balasan..."
+        autocomplete="off"
+        spellcheck="false"
+      >
+      <button class="btn-send-text" onclick="sendManual()">Kirim</button>
+    </div>
+
+    <!-- History -->
+    <div class="section-title">Riwayat Terkirim</div>
+    <div class="history-list" id="historyList">
+      <div class="history-empty" id="historyEmpty">(belum ada pesan terkirim)</div>
+    </div>
+
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <div class="status-panel">
+      <div class="stat-block">
+        <div class="stat-val idle" id="statMsgCount">0</div>
+        <div class="stat-key">Pesan Terkirim</div>
+      </div>
+
+      <div class="live-indicator">
+        <div class="live-dot" id="liveDot"></div>
+        <span id="liveTxt" style="color:var(--gray)">Siap</span>
+      </div>
+
+      <div class="vol-wrap" id="volWrap">
+        <div class="vol-header">
+          <span style="color:var(--teal)">Input Level</span>
+          <span id="volPct">--</span>
+        </div>
+        <div class="vol-bars" id="volBars">
+          <!-- bars injected by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick phrases -->
+    <div class="quick-panel">
+      <div class="quick-label">Frasa Cepat</div>
+      <div class="quick-grid" id="quickGrid">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div>
+        <div class="stat-mini-val" id="statWords">0</div>
+        <div class="stat-mini-key">Total Kata</div>
+      </div>
+      <div>
+        <div class="stat-mini-val" id="statSign">--</div>
+        <div class="stat-mini-key">Isyarat Dtm</div>
+      </div>
+    </div>
+
+    <div class="status-log">
+      <div class="status-line info" id="statusLine">● Menghubungkan...</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── PARAMS ───
+const params   = new URLSearchParams(location.search);
+const ROOM     = (params.get('room') || 'DEFAULT').toUpperCase();
+document.getElementById('roomBadge').textContent = 'ROOM: ' + ROOM;
+
+// ─── STATE ───
+let isRecording    = false;
+let recognition    = null;
+let sttSupported   = false;
+let finalText      = '';
+let interimText    = '';
+let msgCount       = 0;
+let totalWords     = 0;
+let signCount      = 0;
+let historyItems   = [];
+
+// ─── SOCKET ───
+const socket = io();
+
+socket.on('connect', () => {
+  setStatus('● Terhubung — bergabung ke room...', 'info');
+  socket.emit('join_room_as', { room_code: ROOM, role: 'user2' });
+});
+
+socket.on('disconnect', () => setStatus('● Koneksi terputus', 'err'));
+
+socket.on('room_joined', (data) => {
+  setStatus(`● Room ${data.room_code} — siap`, 'ok');
+  updatePartner(data.partner_online);
+  showToast(`Bergabung ke room ${data.room_code}`);
+
+  // Restore existing sign translation if any
+  if (data.translation) {
+    updateSignDisplay(data.translation);
+  }
+});
+
+socket.on('room_error', (data) => {
+  setStatus('● ' + data.msg, 'err');
+  showToast('⚠ ' + data.msg, true);
+});
+
+socket.on('partner_connected', () => {
+  updatePartner(true);
+  showToast('User 1 bergabung ke room');
+});
+
+socket.on('partner_disconnected', () => {
+  updatePartner(false);
+  showToast('User 1 meninggalkan room');
+  document.getElementById('signPulse').classList.remove('active');
+});
+
+// Receive sign translation from User1
+socket.on('sign_translation', (data) => {
+  updateSignDisplay(data.text);
+  signCount++;
+  document.getElementById('statSign').textContent = signCount;
+
+  const section = document.getElementById('signSection');
+  section.classList.add('incoming');
+  setTimeout(() => section.classList.remove('incoming'), 800);
+  document.getElementById('signPulse').classList.add('active');
+  setTimeout(() => document.getElementById('signPulse').classList.remove('active'), 2000);
+});
+
+// ─── SIGN DISPLAY ───
+function updateSignDisplay(text) {
+  const el = document.getElementById('signDisplay');
+  if (!text || !text.trim()) {
+    el.className = 'sign-display empty';
+    el.textContent = '(menunggu isyarat dari User 1...)';
+    return;
+  }
+
+  // Highlight last character/word
+  const parts = text.trimEnd().split(' ');
+  if (parts.length <= 1) {
+    // Character mode — highlight last char
+    const prev = text.slice(0, -1);
+    const last = text.slice(-1);
+    el.className = 'sign-display has-new';
+    el.innerHTML = `<span class="sign-prev">${escHtml(prev)}</span><span class="sign-last">${escHtml(last)}</span>`;
+  } else {
+    const prevWords = parts.slice(0, -1).join(' ');
+    const lastWord  = parts[parts.length - 1];
+    el.className = 'sign-display has-new';
+    el.innerHTML = `<span class="sign-prev">${escHtml(prevWords)} </span><span class="sign-last">${escHtml(lastWord)}</span>`;
+  }
+}
+
+function clearSignDisplay() {
+  document.getElementById('signDisplay').className = 'sign-display empty';
+  document.getElementById('signDisplay').textContent = '(menunggu isyarat dari User 1...)';
+  document.getElementById('signPulse').classList.remove('active');
+  showToast('Tampilan isyarat dikosongkan');
+}
+
+// ─── SPEECH RECOGNITION ───
+function initSTT() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    document.getElementById('sttNotice').classList.add('show');
+    document.getElementById('btnRecord').disabled = true;
+    document.getElementById('btnRecord').title = 'Browser tidak mendukung STT';
+    return;
+  }
+
+  sttSupported = true;
+  recognition  = new SpeechRecognition();
+  recognition.continuous      = true;
+  recognition.interimResults  = true;
+  recognition.lang            = 'id-ID';
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    setLive(true);
+    setStatus('● Mendengarkan...', 'info');
+    document.getElementById('volWrap').classList.add('visible');
+    startVolAnimation();
+  };
+
+  recognition.onend = () => {
+    if (isRecording) {
+      // auto-restart if still supposed to be recording
+      try { recognition.start(); } catch(e) {}
+    } else {
+      setLive(false);
+      document.getElementById('volWrap').classList.remove('visible');
+      stopVolAnimation();
+    }
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error === 'no-speech') return;
+    if (e.error === 'aborted')   return;
+    setStatus('● STT error: ' + e.error, 'err');
+    if (isRecording) stopRecording();
+  };
+
+  recognition.onresult = (e) => {
+    interimText = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) {
+        finalText   += t + ' ';
+        interimText  = '';
+      } else {
+        interimText += t;
+      }
+    }
+    updateRecogUI();
+
+    // Live broadcast interim to User1
+    socket.emit('speech_result', {
+      text:     finalText + interimText,
+      is_final: false,
+    });
+  };
+}
+
+function toggleRecording() {
+  if (!sttSupported) return;
+  if (isRecording) { stopRecording(); }
+  else             { startRecording(); }
+}
+
+function startRecording() {
+  if (!sttSupported || isRecording) return;
+  finalText   = '';
+  interimText = '';
+  updateRecogUI();
+  isRecording = true;
+
+  document.getElementById('btnRecord').classList.add('recording');
+  document.getElementById('btnRecordTxt').textContent = '■ STOP';
+  document.getElementById('recogBox').classList.add('listening');
+
+  try { recognition.start(); }
+  catch(e) { console.warn('STT start error:', e); }
+}
+
+function stopRecording() {
+  if (!isRecording) return;
+  isRecording = false;
+
+  document.getElementById('btnRecord').classList.remove('recording');
+  document.getElementById('btnRecordTxt').textContent = '● REC';
+  document.getElementById('recogBox').classList.remove('listening');
+
+  try { recognition.stop(); } catch(e) {}
+  setLive(false);
+  document.getElementById('volWrap').classList.remove('visible');
+  stopVolAnimation();
+
+  updateRecogUI();
+  document.getElementById('btnSend').disabled = !finalText.trim();
+}
+
+function updateRecogUI() {
+  const interimEl = document.getElementById('recogInterim');
+  const finalEl   = document.getElementById('recogFinal');
+
+  interimEl.textContent = interimText;
+
+  if (finalText.trim()) {
+    finalEl.textContent = finalText.trim();
+    finalEl.className   = 'recog-final';
+    document.getElementById('btnSend').disabled = false;
+  } else if (!isRecording) {
+    finalEl.textContent = '(tekan rekam untuk mulai berbicara...)';
+    finalEl.className   = 'recog-final empty';
+    document.getElementById('btnSend').disabled = true;
+  } else {
+    finalEl.textContent = '';
+    finalEl.className   = 'recog-final';
+    document.getElementById('btnSend').disabled = true;
+  }
+}
+
+function sendSpeech() {
+  const text = finalText.trim();
+  if (!text) return;
+  if (isRecording) stopRecording();
+
+  socket.emit('speech_result', { text, is_final: true });
+  addHistory(text);
+
+  finalText   = '';
+  interimText = '';
+  updateRecogUI();
+  document.getElementById('btnSend').disabled = true;
+  showToast('Pesan terkirim ke User 1');
+}
+
+// ─── MANUAL TEXT ───
+function sendManual() {
+  const input = document.getElementById('manualInput');
+  const text  = input.value.trim();
+  if (!text) return;
+
+  socket.emit('speech_result', { text, is_final: true });
+  addHistory(text);
+  input.value = '';
+  showToast('Pesan terkirim');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('manualInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendManual();
+  });
+});
+
+// ─── HISTORY ───
+function addHistory(text) {
+  const words  = text.trim().split(/\s+/).filter(Boolean).length;
+  msgCount++;
+  totalWords  += words;
+  document.getElementById('statMsgCount').textContent = msgCount;
+  document.getElementById('statMsgCount').classList.remove('idle');
+  document.getElementById('statWords').textContent    = totalWords;
+
+  const now  = new Date();
+  const time = now.getHours().toString().padStart(2,'0') + ':' +
+               now.getMinutes().toString().padStart(2,'0') + ':' +
+               now.getSeconds().toString().padStart(2,'0');
+
+  historyItems.unshift({ text, time });
+
+  const list  = document.getElementById('historyList');
+  const empty = document.getElementById('historyEmpty');
+  if (empty) empty.remove();
+
+  // Add new item at top
+  const item = document.createElement('div');
+  item.className = 'history-item';
+  item.innerHTML = `<span>${escHtml(text)}</span><span class="history-time">${time}</span>`;
+  list.insertBefore(item, list.firstChild);
+
+  // Keep max 20
+  while (list.children.length > 20) {
+    list.removeChild(list.lastChild);
+  }
+}
+
+// ─── VOLUME ANIMATION ───
+const NUM_BARS = 12;
+let volAnimFrame = null;
+
+function initVolBars() {
+  const container = document.getElementById('volBars');
+  container.innerHTML = '';
+  for (let i = 0; i < NUM_BARS; i++) {
+    const b = document.createElement('div');
+    b.className = 'vol-bar';
+    b.style.height = '3px';
+    container.appendChild(b);
+  }
+}
+
+function startVolAnimation() {
+  function animate() {
+    const bars = document.querySelectorAll('.vol-bar');
+    bars.forEach((b, i) => {
+      const h = isRecording ? (Math.random() * 22 + 3) : 3;
+      b.style.height    = h + 'px';
+      b.style.background = h > 18 ? 'var(--teal)' : h > 10 ? '#00b8a8' : 'var(--teal-dim)';
+    });
+    volAnimFrame = requestAnimationFrame(animate);
+  }
+  animate();
+}
+
+function stopVolAnimation() {
+  if (volAnimFrame) { cancelAnimationFrame(volAnimFrame); volAnimFrame = null; }
+  document.querySelectorAll('.vol-bar').forEach(b => {
+    b.style.height     = '3px';
+    b.style.background = 'var(--teal-dim)';
+  });
+}
+
+// ─── QUICK PHRASES ───
+const QUICK_PHRASES = [
+  'Bisa diulangi?',
+  'Saya mengerti.',
+  'Terima kasih.',
+  'Tunggu sebentar.',
+  'Ya, betul.',
+  'Tidak, terima kasih.',
+  'Maaf, belum jelas.',
+  'Oke, saya setuju.',
+  'Bisa lebih lambat?',
+  'Sampai jumpa!',
+];
+
+function initQuickPhrases() {
+  const grid = document.getElementById('quickGrid');
+  QUICK_PHRASES.forEach(phrase => {
+    const btn = document.createElement('button');
+    btn.className   = 'quick-btn';
+    btn.textContent = phrase;
+    btn.onclick = () => {
+      socket.emit('speech_result', { text: phrase, is_final: true });
+      addHistory(phrase);
+      showToast('Frasa terkirim');
+    };
+    grid.appendChild(btn);
+  });
+}
+
+// ─── HELPERS ───
+function updatePartner(online) {
+  const pill = document.getElementById('partnerPill');
+  pill.textContent = online ? '● User 1: Online' : '● User 1: Offline';
+  pill.classList.toggle('online', online);
+}
+
+function setLive(active) {
+  const dot = document.getElementById('liveDot');
+  const txt = document.getElementById('liveTxt');
+  if (active) {
+    dot.classList.add('active');
+    dot.classList.remove('ready');
+    txt.textContent = 'Merekam';
+    txt.style.color = 'var(--red)';
+  } else {
+    dot.classList.remove('active');
+    dot.classList.add('ready');
+    txt.textContent = 'Siap';
+    txt.style.color = 'var(--teal)';
+  }
+}
+
+function setStatus(msg, type = '') {
+  const el = document.getElementById('statusLine');
+  el.textContent = msg;
+  el.className   = 'status-line ' + type;
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+let toastTimer;
+function showToast(msg, err = false) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.style.borderColor = err ? 'var(--red)'  : 'var(--teal)';
+  toast.style.color       = err ? 'var(--red)'  : 'var(--teal)';
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+// ─── KEYBOARD SHORTCUTS ───
+document.addEventListener('keydown', (e) => {
+  const tag = document.activeElement.tagName.toLowerCase();
+  if (tag === 'input') return;
+
+  const k = e.key.toLowerCase();
+  if (k === 'r') toggleRecording();
+  else if (k === 's' && finalText.trim()) sendSpeech();
+  else if (k === 'c') {
+    finalText = ''; interimText = '';
+    updateRecogUI();
+    showToast('Input dikosongkan');
+  }
+});
+
+// ─── INIT ───
+initVolBars();
+initQuickPhrases();
+initSTT();
+setLive(false);
+document.getElementById('liveDot').classList.add('ready');
+document.getElementById('liveTxt').textContent = 'Siap';
+document.getElementById('liveTxt').style.color = 'var(--teal)';
+</script>
+</body>
+</html>
