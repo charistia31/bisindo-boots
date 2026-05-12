@@ -156,6 +156,27 @@ body {
 }
 .hand-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
 
+/* ── ESP32 INDICATOR ── */
+.esp32-pill {
+  font-size: 0.6rem;
+  color: var(--gray);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 2px 8px;
+  transition: all 0.3s;
+}
+.esp32-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.esp32-pill.flash { border-color: var(--yellow); color: var(--yellow); }
+.esp32-pill.flash .esp32-dot { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+
 /* ── TRANSLATION BAR ── */
 .translation-bar {
   background: #060e06;
@@ -519,6 +540,10 @@ body {
     <div class="hand-dot" id="handDot"></div>
     <span id="handTxt">--</span>
   </div>
+  <div class="esp32-pill" id="esp32Pill" title="Sinyal tombol hardware ESP32">
+    <div class="esp32-dot" id="esp32Dot"></div>
+    <span id="esp32Txt">ESP32</span>
+  </div>
 </div>
 
 <!-- MY TRANSLATION BAR -->
@@ -683,7 +708,10 @@ socket.on('translation_update', (data) => {
 socket.on('mode_changed', (data) => {
   currentMode = data.mode;
   updateModeUI();
-  showToast('Mode ' + (data.mode === 'IMAGE' ? 'Gambar' : 'Video') + ' aktif');
+  const label = data.mode === 'IMAGE' ? 'Gambar' : 'Video';
+  const src   = data.source === 'esp32' ? ' (🔘 Tombol ESP32)' : '';
+  showToast('Mode ' + label + ' aktif' + src);
+  if (data.source === 'esp32') flashEsp32();
 });
 
 socket.on('seq_progress', (data) => {
@@ -773,6 +801,20 @@ function updateTranslation(text) {
     translationEl.className   = 'tl-text empty';
     statCount.textContent     = '0';
   }
+}
+
+// ─── ESP32 INDICATOR ───
+let esp32Timer;
+function flashEsp32() {
+  const pill = document.getElementById('esp32Pill');
+  const txt  = document.getElementById('esp32Txt');
+  pill.classList.add('flash');
+  txt.textContent = 'SINYAL!';
+  clearTimeout(esp32Timer);
+  esp32Timer = setTimeout(() => {
+    pill.classList.remove('flash');
+    txt.textContent = 'ESP32';
+  }, 1800);
 }
 
 function updateModeUI() {
