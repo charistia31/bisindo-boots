@@ -3,13 +3,15 @@
 BISINDO Web - Flask + SocketIO Backend
 Two-user room system: User1 (signer) <-> User2 (listener + speech)
 """
-
+import eventlet
+eventlet.monkey_patch()
 import os
 import sys
 import warnings
 import pickle
 import base64
 import numpy as np
+
 
 warnings.filterwarnings("ignore")
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -194,6 +196,58 @@ def user1_page():
 @app.route("/user2")
 def user2_page():
     return render_template("user2.html")
+
+# ─────────────────────────────────────────────
+#  ROUTE — ESP32 HARDWARE BUTTON
+#  GET /esp32/mode?room=ROOMCODE&mode=IMAGE|VIDEO
+#  Called by esp32_bridge.py (Serial → HTTP)
+# ─────────────────────────────────────────────
+@app.route("/esp32/mode")
+def esp32_mode():
+    room_code = flask_request.args.get("room", "").strip().upper()
+    mode      = flask_request.args.get("mode", "IMAGE").strip().upper()
+
+    if mode not in ("IMAGE", "VIDEO"):
+        return {"ok": False, "error": "mode harus IMAGE atau VIDEO"}, 400
+
+    if not room_code:
+        return {"ok": False, "error": "room_code wajib diisi"}, 400
+
+    if room_code not in rooms:
+        return {"ok": False, "error": f"Room {room_code} tidak ditemukan"}, 404
+
+    room = rooms[room_code]
+    user1_sid = room.get("user1")
+
+    if not user1_sid or user1_sid not in sessions:
+        return {"ok": False, "error": "User 1 belum terhubung ke room ini"}, 404
+
+    s = sessions[user1_sid]
+
+    # Validate model availability
+    if mode == "IMAGE" and model_img is None:
+        return {"ok": False, "error": "Model gambar tidak tersedia di server"}, 503
+    if mode == "VIDEO" and model_vid is None:
+        return {"ok": False, "error": "Model video tidak tersedia di server"}, 503
+
+    # Update session state (same logic as on_set_mode)
+    s["mode"]          = mode
+    s["sequence"]      = []
+    s["collecting"]    = False
+    s["prob_buffer"].clear()
+    s["label_buffer"].clear()
+    s["no_hand_count"] = 0
+    s["last_label"]    = None
+    s["current_label"] = "---"
+    s["current_conf"]  = 0.0
+    s["debounce"]      = 0
+
+    # Broadcast mode_changed to the whole room (User1 + User2 both receive it)
+    socketio.emit("mode_changed", {"mode": mode, "source": "esp32"}, room=room_code)
+
+    label = "Gambar" if mode == "IMAGE" else "Video"
+    print(f"[ESP32] Room {room_code} → Mode {label} (via hardware button)")
+    return {"ok": True, "room": room_code, "mode": mode}
 
 # ─────────────────────────────────────────────
 #  SOCKETIO — ROOM / ROLE EVENTS
