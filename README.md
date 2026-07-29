@@ -1,4 +1,4 @@
-# BISINDO Hand Gesture Translator - FINAL VERSION
+# BISINDO Hand Gesture Translator
 
 ## Penerjemah Hand Gesture BISINDO Real-Time (LSTM-CNN + Vision IoT)
 
